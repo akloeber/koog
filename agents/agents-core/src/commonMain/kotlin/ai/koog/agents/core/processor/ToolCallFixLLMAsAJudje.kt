@@ -27,6 +27,7 @@ import ai.koog.prompt.text.text
  * @property numRetries The number of retries allowed when attempting to fix a tool call.
  * @property showHistory Determines whether to preserve and showcase conversation history during processing.
  */
+@ResponseProcessorApi
 public class ToolCallFixLLMAsAJudge(
     private val intentSystemMessage: TextContentBuilderBase<*>.() -> Unit = { assessToolCallIntent() },
     private val fixSystemMessage: TextContentBuilderBase<*>.() -> Unit = { fixToolCall() },

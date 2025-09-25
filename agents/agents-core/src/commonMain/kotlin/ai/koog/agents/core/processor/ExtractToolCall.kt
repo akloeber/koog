@@ -70,6 +70,7 @@ private fun extractJsonToolCall(
  * @param extractJsonToolCall A function that extracts a tool call from a JSON string.
  * @param json The JSON configuration to use.
  */
+@ResponseProcessorApi
 public class ExtractJsonToolCall(
     private val extractJsonToolCall: (String, ResponseMetaInfo, Json) -> Message.Tool.Call? = ::extractJsonToolCall,
     private val json: Json = Json {},
@@ -90,6 +91,7 @@ public class ExtractJsonToolCall(
  * @param extractJsonToolCall A function that extracts a tool call from a JSON string.
  * @param json The JSON configuration to use.
  */
+@ResponseProcessorApi
 public class ExtractTaggedJsonToolCall(
     private val startTag: String = "<tool_call>",
     private val endTag: String = "</tool_call>",

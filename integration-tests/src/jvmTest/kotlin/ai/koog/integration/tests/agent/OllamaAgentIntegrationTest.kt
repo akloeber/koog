@@ -7,6 +7,7 @@ import ai.koog.agents.core.agent.entity.AIAgentGraphStrategy
 import ai.koog.agents.core.agent.singleRunStrategy
 import ai.koog.agents.core.dsl.builder.forwardTo
 import ai.koog.agents.core.dsl.builder.strategy
+import ai.koog.agents.core.processor.ResponseProcessorApi
 import ai.koog.agents.core.processor.ToolCallFixLLMAsAJudge
 import ai.koog.agents.core.dsl.extension.nodeExecuteTool
 import ai.koog.agents.core.dsl.extension.nodeLLMRequest
@@ -26,6 +27,7 @@ import ai.koog.integration.tests.utils.annotations.Retry
 import ai.koog.integration.tests.utils.annotations.RetryExtension
 import ai.koog.prompt.dsl.Prompt
 import ai.koog.prompt.dsl.prompt
+import ai.koog.prompt.executor.llms.all.simpleOllamaAIExecutor
 import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.llm.OllamaModels
@@ -41,14 +43,17 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
-@ExtendWith(OllamaTestFixtureExtension::class)
+//@ExtendWith(OllamaTestFixtureExtension::class)
+@OptIn(ResponseProcessorApi::class)
 @ExtendWith(RetryExtension::class)
 class OllamaAgentIntegrationTest {
     companion object {
-        @field:InjectOllamaTestFixture
-        private lateinit var fixture: OllamaTestFixture
-        private val executor get() = fixture.executor
-        private val model get() = fixture.model
+//        @field:InjectOllamaTestFixture
+//        private lateinit var fixture: OllamaTestFixture
+//        private val executor get() = fixture.executor
+//        private val model get() = fixture.model
+        private val executor = simpleOllamaAIExecutor()
+        private val model = OllamaModels.Meta.LLAMA_3_2
     }
 
     @BeforeTest
@@ -179,6 +184,8 @@ class OllamaAgentIntegrationTest {
                             eventContext.toolArgs.toString().lines().first().take(100)
                         }"
                     )
+
+                    toolCalls.add(eventContext.tool.name)
                 }
 
                 onBeforeLLMCall { eventContext ->
@@ -215,6 +222,7 @@ class OllamaAgentIntegrationTest {
         assertContains(result, "Paris", ignoreCase = true, "Result should contain the answer 'Paris'")
     }
 
+    @OptIn(ResponseProcessorApi::class)
     fun ollama_testFileOperationsAgent(llmModel: LLModel = OllamaModels.Meta.LLAMA_3_2) = runTest(timeout = 600.seconds) {
         val responseProcessor = ToolCallFixLLMAsAJudge(showHistory = false)
         val strategy = singleRunStrategy(responseProcessor = responseProcessor)
@@ -252,12 +260,12 @@ class OllamaAgentIntegrationTest {
         val request = """
             I have created a file named scores.csv in the project directory.
             The file contains the data about the students.
-            
+
             Your task:
             Call a tool to read the data.
             Call a tool to create a "scores.py" file to compute the average score.
             Do not summarize results in the end.
-            
+
             Note:
             Make sure that all paths are relative to the project directory, e.g. "scores.csv", "scores.py".
         """.trimIndent()
