@@ -8,6 +8,7 @@ import ai.koog.agents.core.environment.ReceivedToolResult
 import ai.koog.agents.core.environment.SafeTool
 import ai.koog.agents.core.environment.executeTool
 import ai.koog.agents.core.environment.result
+import ai.koog.agents.core.processor.ResponseProcessor
 import ai.koog.agents.core.tools.Tool
 import ai.koog.agents.core.tools.ToolDescriptor
 import ai.koog.prompt.dsl.ModerationResult
@@ -119,11 +120,13 @@ public fun AIAgentSubgraphBuilderBase<*, *>.nodeLLMSendMessageForceOneTool(
  *
  * @param name Optional node name.
  * @param allowToolCalls Controls whether LLM can use tools (default: true).
+ * @param responseProcessor The processor to apply to the LLM response.
  */
 @AIAgentBuilderDslMarker
 public fun AIAgentSubgraphBuilderBase<*, *>.nodeLLMRequest(
     name: String? = null,
-    allowToolCalls: Boolean = true
+    allowToolCalls: Boolean = true,
+    responseProcessor: ResponseProcessor = ResponseProcessor.None
 ): AIAgentNodeDelegate<String, Message.Response> =
     node(name) { message ->
         llm.writeSession {
@@ -132,7 +135,7 @@ public fun AIAgentSubgraphBuilderBase<*, *>.nodeLLMRequest(
             }
 
             if (allowToolCalls) {
-                requestLLM()
+                requestLLM(responseProcessor = responseProcessor)
             } else {
                 requestLLMWithoutTools()
             }
@@ -271,10 +274,12 @@ public fun AIAgentSubgraphBuilderBase<*, *>.nodeLLMRequestStreaming(
  * A node that appends a user message to the LLM prompt and gets multiple LLM responses with tool calls enabled.
  *
  * @param name Optional node name.
+ * @param responseProcessor The processor to apply to the LLM response.
  */
 @AIAgentBuilderDslMarker
 public fun AIAgentSubgraphBuilderBase<*, *>.nodeLLMRequestMultiple(
-    name: String? = null
+    name: String? = null,
+    responseProcessor: ResponseProcessor = ResponseProcessor.None
 ): AIAgentNodeDelegate<String, List<Message.Response>> =
     node(name) { message ->
         llm.writeSession {
@@ -282,7 +287,7 @@ public fun AIAgentSubgraphBuilderBase<*, *>.nodeLLMRequestMultiple(
                 user(message)
             }
 
-            requestLLMMultiple()
+            requestLLMMultiple(responseProcessor = responseProcessor)
         }
     }
 
@@ -374,10 +379,12 @@ public fun AIAgentSubgraphBuilderBase<*, *>.nodeExecuteTool(
  * A node that adds a tool result to the prompt and requests an LLM response.
  *
  * @param name Optional node name.
+ * @param responseProcessor The processor to apply to the LLM response.
  */
 @AIAgentBuilderDslMarker
 public fun AIAgentSubgraphBuilderBase<*, *>.nodeLLMSendToolResult(
-    name: String? = null
+    name: String? = null,
+    responseProcessor: ResponseProcessor = ResponseProcessor.None,
 ): AIAgentNodeDelegate<ReceivedToolResult, Message.Response> =
     node(name) { result ->
         llm.writeSession {
@@ -387,7 +394,7 @@ public fun AIAgentSubgraphBuilderBase<*, *>.nodeLLMSendToolResult(
                 }
             }
 
-            requestLLM()
+            requestLLM(responseProcessor = responseProcessor)
         }
     }
 
@@ -419,12 +426,15 @@ public fun AIAgentSubgraphBuilderBase<*, *>.nodeExecuteMultipleTools(
  * @param parallelTools A flag to determine if the tool calls should be executed concurrently.
  *                       If true, all tool calls are executed in parallel; otherwise, they are
  *                       executed sequentially. Default value is false.
+ * @param responseProcessor The processor to apply to the LLM response.
+ *
  * @return An instance of [AIAgentNodeDelegate] that takes a list of tool calls as input
  *         and returns the corresponding list of tool responses.
  */
 public fun AIAgentSubgraphBuilderBase<*, *>.nodeExecuteMultipleToolsAndSendResults(
     name: String? = null,
     parallelTools: Boolean = false,
+    responseProcessor: ResponseProcessor = ResponseProcessor.None,
 ): AIAgentNodeDelegate<List<Message.Tool.Call>, List<Message.Response>> =
     node(name) { toolCalls ->
         val results = if (parallelTools) {
@@ -440,7 +450,7 @@ public fun AIAgentSubgraphBuilderBase<*, *>.nodeExecuteMultipleToolsAndSendResul
                 }
             }
 
-            requestLLMMultiple()
+            requestLLMMultiple(responseProcessor = responseProcessor)
         }
     }
 
@@ -448,10 +458,12 @@ public fun AIAgentSubgraphBuilderBase<*, *>.nodeExecuteMultipleToolsAndSendResul
  * A node that adds multiple tool results to the prompt and gets multiple LLM responses.
  *
  * @param name Optional node name.
+ * @param responseProcessor The processor to apply to the LLM response.
  */
 @AIAgentBuilderDslMarker
 public fun AIAgentSubgraphBuilderBase<*, *>.nodeLLMSendMultipleToolResults(
-    name: String? = null
+    name: String? = null,
+    responseProcessor: ResponseProcessor = ResponseProcessor.None,
 ): AIAgentNodeDelegate<List<ReceivedToolResult>, List<Message.Response>> =
     node(name) { results ->
         llm.writeSession {
@@ -461,7 +473,7 @@ public fun AIAgentSubgraphBuilderBase<*, *>.nodeLLMSendMultipleToolResults(
                 }
             }
 
-            requestLLMMultiple()
+            requestLLMMultiple(responseProcessor = responseProcessor)
         }
     }
 

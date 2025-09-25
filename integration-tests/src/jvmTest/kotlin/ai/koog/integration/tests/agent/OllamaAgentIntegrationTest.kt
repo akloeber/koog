@@ -4,8 +4,10 @@ import ai.koog.agents.core.agent.AIAgent
 import ai.koog.agents.core.agent.config.AIAgentConfig
 import ai.koog.agents.core.agent.context.agentInput
 import ai.koog.agents.core.agent.entity.AIAgentGraphStrategy
+import ai.koog.agents.core.agent.singleRunStrategy
 import ai.koog.agents.core.dsl.builder.forwardTo
 import ai.koog.agents.core.dsl.builder.strategy
+import ai.koog.agents.core.processor.ToolCallFixLLMAsAJudge
 import ai.koog.agents.core.dsl.extension.nodeExecuteTool
 import ai.koog.agents.core.dsl.extension.nodeLLMRequest
 import ai.koog.agents.core.dsl.extension.nodeLLMSendToolResult
@@ -17,18 +19,24 @@ import ai.koog.integration.tests.InjectOllamaTestFixture
 import ai.koog.integration.tests.OllamaTestFixture
 import ai.koog.integration.tests.OllamaTestFixtureExtension
 import ai.koog.integration.tests.tools.AnswerVerificationTool
+import ai.koog.integration.tests.tools.FileOperationsTools
 import ai.koog.integration.tests.tools.GenericParameterTool
 import ai.koog.integration.tests.tools.GeographyQueryTool
 import ai.koog.integration.tests.utils.annotations.Retry
 import ai.koog.integration.tests.utils.annotations.RetryExtension
+import ai.koog.prompt.dsl.Prompt
 import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.executor.model.PromptExecutor
+import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.llm.OllamaModels
+import ai.koog.prompt.markdown.markdown
 import ai.koog.prompt.params.LLMParams
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.extension.ExtendWith
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertContains
+import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
@@ -42,6 +50,14 @@ class OllamaAgentIntegrationTest {
         private val executor get() = fixture.executor
         private val model get() = fixture.model
     }
+
+    @BeforeTest
+    fun clearToolCalls() {
+        println("before test was called")
+        toolCalls.clear()
+    }
+
+    private val toolCalls = mutableListOf<String>()
 
     private fun createTestStrategy() = strategy<String, String>("test-ollama") {
         val askCapitalSubgraph by subgraph<String, String>("ask-capital") {
@@ -58,7 +74,7 @@ class OllamaAgentIntegrationTest {
                                             ALWAYS generate valid JSON responses.
                                             ALWAYS call tool correctly, with valid arguments.
                                             NEVER provide tool call in result body.
-                                            
+
                                             Example tool call:
                                             {
                                                 "id":"ollama_tool_call_3743609160",
@@ -99,7 +115,7 @@ class OllamaAgentIntegrationTest {
                                         ALWAYS generate valid JSON responses.
                                         ALWAYS call tool correctly, with valid arguments.
                                         NEVER provide tool call in result body.
-                                      
+
                                         Example tool call:
                                         {
                                             "id":"ollama_tool_call_3743609160"
@@ -140,7 +156,9 @@ class OllamaAgentIntegrationTest {
     private fun createAgent(
         executor: PromptExecutor,
         strategy: AIAgentGraphStrategy<String, String>,
-        toolRegistry: ToolRegistry
+        toolRegistry: ToolRegistry,
+        llmModel: LLModel = model,
+        prompt: Prompt = prompt("test-ollama", LLMParams(temperature = 0.0)) {}
     ): AIAgent<String, String> {
         val promptsAndResponses = mutableListOf<String>()
 
@@ -148,8 +166,8 @@ class OllamaAgentIntegrationTest {
             promptExecutor = executor,
             strategy = strategy,
             agentConfig = AIAgentConfig(
-                prompt("test-ollama", LLMParams(temperature = 0.0)) {},
-                model,
+                prompt,
+                llmModel,
                 20
             ),
             toolRegistry = toolRegistry
@@ -196,4 +214,67 @@ class OllamaAgentIntegrationTest {
         assertTrue(result.isNotEmpty(), "Result should not be empty")
         assertContains(result, "Paris", ignoreCase = true, "Result should contain the answer 'Paris'")
     }
+
+    fun ollama_testFileOperationsAgent(llmModel: LLModel = OllamaModels.Meta.LLAMA_3_2) = runTest(timeout = 600.seconds) {
+        val responseProcessor = ToolCallFixLLMAsAJudge(showHistory = false)
+        val strategy = singleRunStrategy(responseProcessor = responseProcessor)
+
+        val fileTools = FileOperationsTools()
+        fileTools.createNewFileWithText(
+            pathInProject = "scores.csv",
+            text = """
+                name,age,score
+                Alice,25,85
+                Bob,30,92
+                Charlie,22,78
+            """.trimIndent()
+        )
+        val toolRegistry = ToolRegistry.Companion {
+            tool(fileTools.readFileContentTool)
+            tool(fileTools.createNewFileWithTextTool)
+        }
+
+        val prompt = prompt("test-file-operations") {
+            system {
+                markdown {
+                    +"You are a helpful assistant that can work with files."
+                    +"Perform all actions using tools."
+                    +"Always use single quotes where in the code snippets."
+                    +"Always include  tool name when you want to call a tool."
+                    +"When you completed the task, answer with a single word: \"Done!\"."
+                    +"Do not include any summary in the final message."
+                }
+            }
+        }
+
+        val agent = createAgent(executor, strategy, toolRegistry, llmModel, prompt)
+
+        val request = """
+            I have created a file named scores.csv in the project directory.
+            The file contains the data about the students.
+            
+            Your task:
+            Call a tool to read the data.
+            Call a tool to create a "scores.py" file to compute the average score.
+            Do not summarize results in the end.
+            
+            Note:
+            Make sure that all paths are relative to the project directory, e.g. "scores.csv", "scores.py".
+        """.trimIndent()
+
+        agent.run(request)
+
+        assertContains(toolCalls, "readFileContent", "readFileContent tool should be called")
+        assertContains(toolCalls, "createNewFileWithText", "createNewFileWithText tool should be called")
+
+        assertEquals(2, fileTools.fileContentsByPath.size, "A script with average score should be created")
+    }
+
+    @Retry
+    @Test
+    fun ollama_testFileOperationsAgent_GROQ() = ollama_testFileOperationsAgent(OllamaModels.Groq.LLAMA_3_GROK_TOOL_USE_8B)
+
+    @Retry
+    @Test
+    fun ollama_testFileOperationsAgent_Meta() = ollama_testFileOperationsAgent(OllamaModels.Meta.LLAMA_3_2)
 }

@@ -132,3 +132,20 @@ public suspend fun AIAgentLLMWriteSession.replaceHistoryWithTLDR(
 public fun AIAgentLLMWriteSession.dropTrailingToolCalls() {
     rewritePrompt { prompt -> prompt.withMessages { messages -> messages.dropLastWhile { it is Message.Tool.Call } } }
 }
+
+/**
+ * Runs provided block on a copy of the context, without changing the original context.
+ */
+public suspend fun <T> AIAgentLLMWriteSession.withTemporaryContext(
+    block: suspend AIAgentLLMWriteSession.() -> T
+): T {
+    val oldPrompt = this.prompt.copy()
+    val oldModel = this.model.copy()
+
+    val result = block()
+
+    this.prompt = oldPrompt
+    this.model = oldModel
+
+    return result
+}

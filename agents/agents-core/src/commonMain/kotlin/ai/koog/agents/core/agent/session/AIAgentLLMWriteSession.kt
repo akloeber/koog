@@ -1,6 +1,7 @@
 package ai.koog.agents.core.agent.session
 
 import ai.koog.agents.core.agent.config.AIAgentConfig
+import ai.koog.agents.core.processor.ResponseProcessor
 import ai.koog.agents.core.environment.AIAgentEnvironment
 import ai.koog.agents.core.environment.SafeTool
 import ai.koog.agents.core.tools.Tool
@@ -396,13 +397,14 @@ public class AIAgentLLMWriteSession internal constructor(
     }
 
     /**
-     * Makes an asynchronous request to a Large Language Model (LLM) and updates the current prompt
-     * with the response received from the LLM.
+     * Makes an asynchronous request to a Large Language Model (LLM), processes the response using the provided
+     * responseProcessor, and updates the current prompt with the processed response.
      *
+     * @param responseProcessor The processor to apply to the LLM response.
      * @return A [Message.Response] object containing the response from the LLM.
      */
-    override suspend fun requestLLM(): Message.Response {
-        return super.requestLLM().also { response ->
+    public suspend fun requestLLM(responseProcessor: ResponseProcessor = ResponseProcessor.None): Message.Response {
+        return responseProcessor.process(this, super.requestLLM()).also { response ->
             updatePrompt { message(response) }
         }
     }
@@ -414,10 +416,11 @@ public class AIAgentLLMWriteSession internal constructor(
      * response is subsequently used to update the session's prompt. The prompt updating mechanism
      * allows stateful interactions with the LLM, maintaining context across multiple requests.
      *
+     * @param responseProcessor The processor to apply to the LLM response.
      * @return A list of `Message.Response` containing the results from the LLM.
      */
-    override suspend fun requestLLMMultiple(): List<Message.Response> {
-        return super.requestLLMMultiple().also { responses ->
+    public suspend fun requestLLMMultiple(responseProcessor: ResponseProcessor = ResponseProcessor.None): List<Message.Response> {
+        return responseProcessor.process(this, super.requestLLMMultiple()).also { responses ->
             updatePrompt {
                 responses.forEach { message(it) }
             }
