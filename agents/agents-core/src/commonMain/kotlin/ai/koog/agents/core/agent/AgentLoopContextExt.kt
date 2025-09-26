@@ -6,6 +6,7 @@ import ai.koog.agents.core.environment.ReceivedToolResult
 import ai.koog.agents.core.environment.SafeTool
 import ai.koog.agents.core.environment.executeTool
 import ai.koog.agents.core.environment.result
+import ai.koog.agents.core.processor.ResponseProcessor
 import ai.koog.agents.core.tools.Tool
 import ai.koog.agents.core.tools.ToolArgs
 import ai.koog.agents.core.tools.ToolDescriptor
@@ -25,10 +26,12 @@ import kotlinx.serialization.serializer
  *
  * @param message The content of the message to be sent to the LLM.
  * @param allowToolCalls Specifies whether tool calls are allowed during the LLM interaction. Defaults to `true`.
+ * @param responseProcessor The processor to apply to the LLM response.
  */
 public suspend fun AIAgentFunctionalContext.requestLLM(
     message: String,
-    allowToolCalls: Boolean = true
+    allowToolCalls: Boolean = true,
+    responseProcessor: ResponseProcessor = ResponseProcessor.None
 ): Message.Response {
     return llm.writeSession {
         updatePrompt {
@@ -36,7 +39,7 @@ public suspend fun AIAgentFunctionalContext.requestLLM(
         }
 
         if (allowToolCalls) {
-            requestLLM()
+            requestLLM(responseProcessor)
         } else {
             requestLLMWithoutTools()
         }
@@ -192,15 +195,19 @@ public suspend fun AIAgentFunctionalContext.requestLLMStreaming(
  * The message becomes part of the current prompt, and multiple responses from the LLM are collected.
  *
  * @param message The content of the message to be sent to the LLM.
+ * @param responseProcessor The processor to apply to the LLM response.
  * @return A list of LLM responses.
  */
-public suspend fun AIAgentFunctionalContext.requestLLMMultiple(message: String): List<Message.Response> {
+public suspend fun AIAgentFunctionalContext.requestLLMMultiple(
+    message: String,
+    responseProcessor: ResponseProcessor = ResponseProcessor.None
+): List<Message.Response> {
     return llm.writeSession {
         updatePrompt {
             user(message)
         }
 
-        requestLLMMultiple()
+        requestLLMMultiple(responseProcessor)
     }
 }
 
@@ -296,9 +303,13 @@ public suspend fun AIAgentFunctionalContext.executeMultipleTools(
  * Adds a tool result to the prompt and requests an LLM response.
  *
  * @param toolResult The tool result to add to the prompt.
+ * @param responseProcessor The processor to apply to the LLM response.
  * @return The LLM response.
  */
-public suspend fun AIAgentFunctionalContext.sendToolResult(toolResult: ReceivedToolResult): Message.Response {
+public suspend fun AIAgentFunctionalContext.sendToolResult(
+    toolResult: ReceivedToolResult,
+    responseProcessor: ResponseProcessor = ResponseProcessor.None
+): Message.Response {
     return llm.writeSession {
         updatePrompt {
             tool {
@@ -306,7 +317,7 @@ public suspend fun AIAgentFunctionalContext.sendToolResult(toolResult: ReceivedT
             }
         }
 
-        requestLLM()
+        requestLLM(responseProcessor)
     }
 }
 
@@ -314,10 +325,12 @@ public suspend fun AIAgentFunctionalContext.sendToolResult(toolResult: ReceivedT
  * Adds multiple tool results to the prompt and gets multiple LLM responses.
  *
  * @param results The list of tool results to add to the prompt.
+ * @param responseProcessor The processor to apply to the LLM response.
  * @return A list of LLM responses.
  */
 public suspend fun AIAgentFunctionalContext.sendMultipleToolResults(
-    results: List<ReceivedToolResult>
+    results: List<ReceivedToolResult>,
+    responseProcessor: ResponseProcessor = ResponseProcessor.None
 ): List<Message.Response> {
     return llm.writeSession {
         updatePrompt {
@@ -326,7 +339,7 @@ public suspend fun AIAgentFunctionalContext.sendMultipleToolResults(
             }
         }
 
-        requestLLMMultiple()
+        requestLLMMultiple(responseProcessor)
     }
 }
 

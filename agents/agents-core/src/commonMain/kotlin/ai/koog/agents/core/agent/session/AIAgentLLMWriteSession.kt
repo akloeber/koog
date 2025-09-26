@@ -403,11 +403,19 @@ public class AIAgentLLMWriteSession internal constructor(
      * @param responseProcessor The processor to apply to the LLM response.
      * @return A [Message.Response] object containing the response from the LLM.
      */
-    public suspend fun requestLLM(responseProcessor: ResponseProcessor = ResponseProcessor.None): Message.Response {
+    public suspend fun requestLLM(responseProcessor: ResponseProcessor): Message.Response {
         return responseProcessor.process(this, super.requestLLM()).also { response ->
             updatePrompt { message(response) }
         }
     }
+
+    /**
+     * Makes an asynchronous request to a Large Language Model (LLM),
+     * and updates the current prompt with the processed response.
+     *
+     * @return A [Message.Response] object containing the response from the LLM.
+     */
+    override suspend fun requestLLM(): Message.Response = requestLLM(ResponseProcessor.None)
 
     /**
      * Requests multiple responses from the LLM and updates the prompt with the received responses.
@@ -419,13 +427,24 @@ public class AIAgentLLMWriteSession internal constructor(
      * @param responseProcessor The processor to apply to the LLM response.
      * @return A list of `Message.Response` containing the results from the LLM.
      */
-    public suspend fun requestLLMMultiple(responseProcessor: ResponseProcessor = ResponseProcessor.None): List<Message.Response> {
+    public suspend fun requestLLMMultiple(responseProcessor: ResponseProcessor): List<Message.Response> {
         return responseProcessor.process(this, super.requestLLMMultiple()).also { responses ->
             updatePrompt {
                 responses.forEach { message(it) }
             }
         }
     }
+
+    /**
+     * Requests multiple responses from the LLM and updates the prompt with the received responses.
+     *
+     * This method invokes the superclass implementation to fetch a list of LLM responses. Each
+     * response is subsequently used to update the session's prompt. The prompt updating mechanism
+     * allows stateful interactions with the LLM, maintaining context across multiple requests.
+     *
+     * @return A list of `Message.Response` containing the results from the LLM.
+     */
+    override suspend fun requestLLMMultiple(): List<Message.Response> = requestLLMMultiple(ResponseProcessor.None)
 
     /**
      * Sends a request to LLM and gets a structured response.
