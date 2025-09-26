@@ -6,20 +6,23 @@ import ai.koog.prompt.message.Message
 import io.github.oshai.kotlinlogging.KLogger
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlin.RequiresOptIn
+import kotlin.jvm.JvmStatic
 
 /**
  * Opt-in annotation for ResponseProcessor API.
  */
-@RequiresOptIn
+@RequiresOptIn(
+    message = "ResponseProcessor API can update LLM responses and make additional calls to LLM. Please opt-in only when you reviewed the api and understand the risks."
+)
 public annotation class ResponseProcessorApi
 
 /**
  * A processor for handling and potentially modifying LLM responses.
  */
-@ResponseProcessorApi
-public abstract class ResponseProcessor() {
+public abstract class ResponseProcessor {
 
     protected companion object {
+        @JvmStatic
         protected val logger: KLogger = KotlinLogging.logger {}
     }
 
@@ -64,7 +67,6 @@ public abstract class ResponseProcessor() {
      * A ResponseProcessor that does not modify messages.
      * This implementation is exempt from the opt-in requirement.
      */
-    @Suppress("ResponseProcessorApi")
     public object None : ResponseProcessor() {
         override suspend fun updateMessages(
             session: AIAgentLLMWriteSession,

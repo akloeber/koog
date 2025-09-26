@@ -24,7 +24,7 @@ import ai.koog.prompt.text.text
  * @property getFeedback Feedback generated based on the language model's response.
  * @property fallback A function to be executed as a fallback when retries have been exhausted.
  * @property extractJsonToolCall A processing chain responsible for extracting tool call information from responses.
- * @property numRetries The number of retries allowed when attempting to fix a tool call.
+ * @property maxRetries The number of retries allowed when attempting to fix a tool call.
  * @property showHistory Determines whether to preserve and showcase conversation history during processing.
  */
 @ResponseProcessorApi
@@ -32,16 +32,16 @@ public class ToolCallFixLLMAsAJudge(
     private val intentSystemMessage: TextContentBuilderBase<*>.() -> Unit = { assessToolCallIntent() },
     private val fixSystemMessage: TextContentBuilderBase<*>.() -> Unit = { fixToolCall() },
     private val getFeedback: AIAgentLLMWriteSession.(Message.Response) -> String? = { defaultGetFeedback(it) },
-    private val fallback: AIAgentLLMWriteSession.(Message.Response) -> Message.Response = { it },
+    private val fallback: suspend AIAgentLLMWriteSession.(Message.Response) -> Message.Response = { it },
     private val messagePreprocessing: ResponseProcessor = Chain(
         ExtractJsonToolCall(),
         ExtractTaggedJsonToolCall()
     ),
-    private val numRetries: Int = 3,
+    private val maxRetries: Int = 3,
     private val showHistory: Boolean = false,
 ) : ResponseProcessor() {
     init {
-        require(numRetries > 0) { "numRetries must be greater than 0" }
+        require(maxRetries > 0) { "numRetries must be greater than 0" }
     }
 
     override suspend fun updateMessages(
@@ -68,13 +68,13 @@ public class ToolCallFixLLMAsAJudge(
             var result = message
             var i = 0
 
-            while (i++ < numRetries) {
+            while (i++ < maxRetries) {
                 val feedback = getFeedback(result) ?: break
                 updatePrompt { user(feedback) }
                 result = requestLLMProcessed()
             }
 
-            if (i == numRetries) null else result
+            if (i > maxRetries && getFeedback(result) != null) null else result
         }
 
         return (fixedMessage ?: fallback(message)).also { logger.info { "Updated message: $it" } }
@@ -105,7 +105,7 @@ public class ToolCallFixLLMAsAJudge(
 private fun AIAgentLLMWriteSession.defaultGetFeedback(message: Message.Response): String? {
     if (message !is Message.Tool.Call) return text { fixToolCallFormat(tools) }
 
-    if (!tools.any { it.name == message.tool}) {
+    if (!tools.any { it.name == message.tool }) {
         return text { fixToolName(message.tool, tools) }
     }
 
