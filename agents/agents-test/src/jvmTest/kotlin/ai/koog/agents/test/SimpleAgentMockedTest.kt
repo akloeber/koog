@@ -1,6 +1,7 @@
 package ai.koog.agents.test
 
 import ai.koog.agents.core.agent.AIAgent
+import ai.koog.agents.core.environment.ReceivedToolResult
 import ai.koog.agents.core.tools.SimpleTool
 import ai.koog.agents.core.tools.ToolException
 import ai.koog.agents.core.tools.ToolRegistry
@@ -19,6 +20,8 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class SimpleAgentMockedTest {
@@ -67,35 +70,40 @@ class SimpleAgentMockedTest {
     }
 
     val eventHandlerConfig: EventHandlerConfig.() -> Unit = {
-        onToolCall { eventContext ->
+        onToolExecutionStarting { eventContext ->
             println("Tool called: tool ${eventContext.tool.name}, args ${eventContext.toolArgs}")
             actualToolCalls.add(eventContext.tool.name)
             iterationCount++
         }
 
-        onAgentRunError { eventContext ->
+        onAgentExecutionFailed { eventContext ->
             errors.add(eventContext.throwable)
         }
 
-        onToolCall { eventContext ->
+        onToolExecutionStarting { eventContext ->
             println("Tool called: tool ${eventContext.tool.name}, args ${eventContext.toolArgs}")
             actualToolCalls.add(eventContext.tool.name)
         }
 
-        onToolCallFailure { eventContext ->
+        onToolExecutionFailed { eventContext ->
             println(
                 "Tool call failure: tool ${eventContext.tool.name}, args ${eventContext.toolArgs}, error=${eventContext.throwable.message}"
             )
             errors.add(eventContext.throwable)
         }
 
-        onAgentFinished { eventContext ->
+        onNodeExecutionCompleted { eventContext ->
+            if (eventContext.output is ReceivedToolResult) toolResults.add(eventContext.output as ReceivedToolResult)
+        }
+
+        onAgentCompleted { eventContext ->
             results.add(eventContext.result)
         }
     }
 
     val actualToolCalls = mutableListOf<String>()
     val errors = mutableListOf<Throwable>()
+    val toolResults = mutableListOf<ReceivedToolResult>()
     val results = mutableListOf<Any?>()
     var iterationCount = 0
 
@@ -103,6 +111,7 @@ class SimpleAgentMockedTest {
     fun teardown() {
         actualToolCalls.clear()
         errors.clear()
+        toolResults.clear()
         results.clear()
         iterationCount = 0
     }
@@ -206,14 +215,10 @@ class SimpleAgentMockedTest {
             installFeatures = { install(EventHandler, eventHandlerConfig) }
         )
 
-        try {
-            agent.run(errorTrigger)
-        } catch (e: Throwable) {
-            assertTrue(e is IllegalArgumentException, "Expected IllegalArgumentException")
-            assertTrue(e.message?.contains("is not defined") == true, "Expected 'not defined' error message")
-        }
+        agent.run(errorTrigger)
 
-        assertTrue(errors.isNotEmpty(), "Expected errors to be recorded")
+        assertEquals(1, toolResults.size, "Expected 1 tool result")
+        assertContains(toolResults.first().content, "is not defined")
     }
 
     @Test

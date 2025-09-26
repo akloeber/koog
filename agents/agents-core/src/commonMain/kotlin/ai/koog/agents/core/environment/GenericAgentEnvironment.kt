@@ -106,9 +106,11 @@ internal class GenericAgentEnvironment(
             val tool = try {
                 toolRegistry.getTool(content.toolName)
             } catch (e: Exception) {
-                logger.error(e) { "Tool \"${content.toolName}\" not found!" }
+                // need to add a pipeline.onToolNotFound method
+                val message = e.message ?: "Tool \"${content.toolName}\" is not defined"
+                logger.error(e) { message }
                 return toolResult(
-                    message = "Tool \"${content.toolName}\" not found!",
+                    message = message,
                     toolCallId = content.toolCallId,
                     toolName = content.toolName,
                     agentId = agentId,
@@ -119,6 +121,7 @@ internal class GenericAgentEnvironment(
             val toolArgs = try {
                 tool.decodeArgs(content.toolArgs)
             } catch (e: Exception) {
+                // need to add a pipeline.onToolParametersValidationFailed method
                 logger.error(e) { "Tool \"${tool.name}\" failed to parse arguments: ${content.toolArgs}" }
                 return toolResult(
                     message = "Tool \"${tool.name}\" failed to parse arguments because of ${e.message}!",

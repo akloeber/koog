@@ -116,14 +116,15 @@ class TraceFeatureMessageTestWriterTest {
             }
         }
 
-        val throwable = assertFails {
-            agent.run("")
-            agent.close()
-        }
-        assertEquals(
-            "Tool \"there is no tool with this name\" is not defined",
-            throwable.message
-        )
+        agent.run("")
+        agent.close()
+
+        val toolExecutionCompletedEvents =
+            messageProcessor.messages.filterIsInstance<ToolExecutionCompletedEvent>().toList()
+
+        assertEquals(0, toolExecutionCompletedEvents.size)
+        // there are currently no events for capturing a nonexisting tool
+        // need to add a proper check for such events, and the error message inside them
     }
 
     @Test
@@ -158,7 +159,7 @@ class TraceFeatureMessageTestWriterTest {
         val toolCallsStartEvent = messageProcessor.messages.filterIsInstance<ToolExecutionStartingEvent>().toList()
         assertEquals(1, toolCallsStartEvent.size, "Tool call start event for existing tool")
 
-        val toolCallsEndEvent = messageProcessor.messages.filterIsInstance<ToolExecutionStartingEvent>().toList()
+        val toolCallsEndEvent = messageProcessor.messages.filterIsInstance<ToolExecutionCompletedEvent>().toList()
         assertEquals(1, toolCallsEndEvent.size, "Tool call end event for existing tool")
     }
 
