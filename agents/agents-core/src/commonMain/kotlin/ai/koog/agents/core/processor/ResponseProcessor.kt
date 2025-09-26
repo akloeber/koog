@@ -35,7 +35,7 @@ public abstract class ResponseProcessor {
 
     /**
      * Updates a list of messages.
-     * 
+     *
      * @param session The session to use for updating.
      * @param messages The messages to update.
      * @return The updated messages.
@@ -48,7 +48,7 @@ public abstract class ResponseProcessor {
     /**
      * Chains multiple response processors together.
      */
-    public class Chain(vararg processors: ResponseProcessor): ResponseProcessor() {
+    public class Chain(vararg processors: ResponseProcessor) : ResponseProcessor() {
         private val processors = processors.toList()
 
         override suspend fun updateMessages(

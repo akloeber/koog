@@ -81,16 +81,17 @@ public class ToolCallFixLLMAsAJudge(
     }
 
     private suspend fun AIAgentLLMWriteSession.isToolCallIntended(message: Message.Response) =
-        message is Message.Tool.Call || withTemporaryContext {
-            prompt = prompt("check-tool-call-intended") {
-                system { intentSystemMessage() }
-                user(message.content)
+        message is Message.Tool.Call ||
+            withTemporaryContext {
+                prompt = prompt("check-tool-call-intended") {
+                    system { intentSystemMessage() }
+                    user(message.content)
+                }
+
+                val response = requestLLMWithoutTools()
+
+                response is Message.Tool.Call || response.content.contains("INTENDED_TOOL_CALL", ignoreCase = true)
             }
-
-            val response = requestLLMWithoutTools()
-
-            response is Message.Tool.Call || response.content.contains("INTENDED_TOOL_CALL", ignoreCase = true)
-        }
 
     private suspend fun AIAgentLLMWriteSession.requestLLMProcessed() =
         requestLLM(responseProcessor = messagePreprocessing)

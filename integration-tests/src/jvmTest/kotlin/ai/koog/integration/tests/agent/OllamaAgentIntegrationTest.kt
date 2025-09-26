@@ -7,13 +7,13 @@ import ai.koog.agents.core.agent.entity.AIAgentGraphStrategy
 import ai.koog.agents.core.agent.singleRunStrategy
 import ai.koog.agents.core.dsl.builder.forwardTo
 import ai.koog.agents.core.dsl.builder.strategy
-import ai.koog.agents.core.processor.ResponseProcessorApi
-import ai.koog.agents.core.processor.ToolCallFixLLMAsAJudge
 import ai.koog.agents.core.dsl.extension.nodeExecuteTool
 import ai.koog.agents.core.dsl.extension.nodeLLMRequest
 import ai.koog.agents.core.dsl.extension.nodeLLMSendToolResult
 import ai.koog.agents.core.dsl.extension.onAssistantMessage
 import ai.koog.agents.core.dsl.extension.onToolCall
+import ai.koog.agents.core.processor.ResponseProcessorApi
+import ai.koog.agents.core.processor.ToolCallFixLLMAsAJudge
 import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.agents.features.eventHandler.feature.EventHandler
 import ai.koog.integration.tests.InjectOllamaTestFixture
@@ -223,41 +223,42 @@ class OllamaAgentIntegrationTest {
     }
 
     @OptIn(ResponseProcessorApi::class)
-    fun ollama_testLLMAsAJudgeToolCallFix(llmModel: LLModel = OllamaModels.Meta.LLAMA_3_2) = runTest(timeout = 600.seconds) {
-        val responseProcessor = ToolCallFixLLMAsAJudge(showHistory = false)
-        val strategy = singleRunStrategy(responseProcessor = responseProcessor)
+    fun ollama_testLLMAsAJudgeToolCallFix(llmModel: LLModel = OllamaModels.Meta.LLAMA_3_2) =
+        runTest(timeout = 600.seconds) {
+            val responseProcessor = ToolCallFixLLMAsAJudge(showHistory = false)
+            val strategy = singleRunStrategy(responseProcessor = responseProcessor)
 
-        val fileTools = FileOperationsTools()
-        fileTools.createNewFileWithText(
-            pathInProject = "scores.txt",
-            text = """
+            val fileTools = FileOperationsTools()
+            fileTools.createNewFileWithText(
+                pathInProject = "scores.txt",
+                text = """
                 name,age,score
                 Alice,25,85
                 Bob,30,92
                 Charlie,22,78
-            """.trimIndent()
-        )
-        val toolRegistry = ToolRegistry.Companion {
-            tool(fileTools.readFileContentTool)
-            tool(fileTools.createNewFileWithTextTool)
-        }
+                """.trimIndent()
+            )
+            val toolRegistry = ToolRegistry.Companion {
+                tool(fileTools.readFileContentTool)
+                tool(fileTools.createNewFileWithTextTool)
+            }
 
-        val prompt = prompt("test-file-operations") {
-            system {
-                markdown {
-                    +"You are a helpful assistant that can work with files."
-                    +"Perform all actions using tools."
-                    +"Always use single quotes where in the code snippets."
-                    +"Always include  tool name when you want to call a tool."
-                    +"When you completed the task, answer with a single word: \"Done!\"."
-                    +"Do not include any summary in the final message."
+            val prompt = prompt("test-file-operations") {
+                system {
+                    markdown {
+                        +"You are a helpful assistant that can work with files."
+                        +"Perform all actions using tools."
+                        +"Always use single quotes where in the code snippets."
+                        +"Always include  tool name when you want to call a tool."
+                        +"When you completed the task, answer with a single word: \"Done!\"."
+                        +"Do not include any summary in the final message."
+                    }
                 }
             }
-        }
 
-        val agent = createAgent(executor, strategy, toolRegistry, llmModel, prompt)
+            val agent = createAgent(executor, strategy, toolRegistry, llmModel, prompt)
 
-        val request = """
+            val request = """
             I have created a file named scores.txt in the project directory.
             The file contains the data about the students.
 
@@ -268,19 +269,20 @@ class OllamaAgentIntegrationTest {
 
             Note:
             Make sure that all paths are relative to the project directory, e.g. "scores.csv", "scores.py".
-        """.trimIndent()
+            """.trimIndent()
 
-        agent.run(request)
+            agent.run(request)
 
-        assertContains(toolCalls, "readFileContent", "readFileContent tool should be called")
-        assertContains(toolCalls, "createNewFileWithText", "createNewFileWithText tool should be called")
+            assertContains(toolCalls, "readFileContent", "readFileContent tool should be called")
+            assertContains(toolCalls, "createNewFileWithText", "createNewFileWithText tool should be called")
 
-        assertEquals(2, fileTools.fileContentsByPath.size, "A script with average score should be created")
-    }
+            assertEquals(2, fileTools.fileContentsByPath.size, "A script with average score should be created")
+        }
 
     @Retry
     @Test
-    fun ollama_testFileOperationsAgent_GROQ() = ollama_testLLMAsAJudgeToolCallFix(OllamaModels.Groq.LLAMA_3_GROK_TOOL_USE_8B)
+    fun ollama_testFileOperationsAgent_GROQ() =
+        ollama_testLLMAsAJudgeToolCallFix(OllamaModels.Groq.LLAMA_3_GROK_TOOL_USE_8B)
 
     @Disabled("Current LLMAsAJudge strategy often fails to fix the tool calls with LLAMA_3_2")
     @Retry

@@ -27,17 +27,17 @@ fun createMockAIAgentLLMWriteSession(
     val mockClock = object : Clock {
         override fun now(): Instant = Instant.parse("2023-01-01T00:00:00Z")
     }
-    
+
     val mockEnvironment = object : AIAgentEnvironment {
         override suspend fun executeTools(toolCalls: List<Message.Tool.Call>): List<ReceivedToolResult> {
             return emptyList()
         }
-        
+
         override suspend fun reportProblem(exception: Throwable) {
             throw exception
         }
     }
-    
+
     return AIAgentLLMWriteSession(
         environment = mockEnvironment,
         executor = executor,
