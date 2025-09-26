@@ -273,8 +273,8 @@ class OllamaAgentIntegrationTest {
 
             agent.run(request)
 
-            assertContains(toolCalls, "readFileContent", "readFileContent tool should be called")
-            assertContains(toolCalls, "createNewFileWithText", "createNewFileWithText tool should be called")
+            assertContains(toolCalls, "ReadFileContent", "readFileContent tool should be called")
+            assertContains(toolCalls, "CreateNewFileWithText", "createNewFileWithText tool should be called")
 
             assertEquals(2, fileTools.fileContentsByPath.size, "A script with average score should be created")
         }
