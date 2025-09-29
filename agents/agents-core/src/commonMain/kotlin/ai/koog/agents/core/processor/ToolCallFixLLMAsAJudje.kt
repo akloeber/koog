@@ -1,7 +1,6 @@
 package ai.koog.agents.core.processor
 
 import ai.koog.agents.core.agent.session.AIAgentLLMWriteSession
-import ai.koog.agents.core.dsl.extension.withTemporaryContext
 import ai.koog.agents.core.prompt.Prompts.assessToolCallIntent
 import ai.koog.agents.core.prompt.Prompts.fixToolArguments
 import ai.koog.agents.core.prompt.Prompts.fixToolCall
@@ -9,7 +8,6 @@ import ai.koog.agents.core.prompt.Prompts.fixToolCallFormat
 import ai.koog.agents.core.prompt.Prompts.fixToolName
 import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.message.Message
-import ai.koog.prompt.text.TextContentBuilderBase
 import ai.koog.prompt.text.text
 
 /**
@@ -19,18 +17,18 @@ import ai.koog.prompt.text.text
  * This class handles processing of responses and applies logic to assess tool call intent, fix
  * incorrect tool calls, and manage retries.
  *
- * @property intentSystemMessage Definition of the system message content used to assess tool call intent.
- * @property fixSystemMessage Definition of the system message content used to fix incorrect tool calls.
+ * @property intentSystemMessage System message used to assess tool call intent.
+ * @property fixSystemMessage System message used to fix incorrect tool calls.
  * @property getFeedback Feedback generated based on the language model's response.
  * @property fallback A function to be executed as a fallback when retries have been exhausted.
- * @property extractJsonToolCall A processing chain responsible for extracting tool call information from responses.
+ * @property messagePreprocessing Processing responsible for extracting tool call information from responses.
  * @property maxRetries The number of retries allowed when attempting to fix a tool call.
  * @property showHistory Determines whether to preserve and showcase conversation history during processing.
  */
 @ResponseProcessorApi
 public class ToolCallFixLLMAsAJudge(
-    private val intentSystemMessage: TextContentBuilderBase<*>.() -> Unit = { assessToolCallIntent() },
-    private val fixSystemMessage: TextContentBuilderBase<*>.() -> Unit = { fixToolCall() },
+    private val intentSystemMessage: String = text { assessToolCallIntent() },
+    private val fixSystemMessage: String = text { fixToolCall() },
     private val getFeedback: AIAgentLLMWriteSession.(Message.Response) -> String? = { defaultGetFeedback(it) },
     private val fallback: suspend AIAgentLLMWriteSession.(Message.Response) -> Message.Response = { it },
     private val messagePreprocessing: ResponseProcessor = Chain(
@@ -55,13 +53,13 @@ public class ToolCallFixLLMAsAJudge(
         val message = messagePreprocessing.process(this, message)
         if (!isToolCallIntended(message)) return message
 
-        val fixedMessage = withTemporaryContext {
+        val fixedMessage = with(copy()) {
             if (!showHistory) {
                 prompt = prompt("fix-tool-call") {}
             }
 
             updatePrompt {
-                system { fixSystemMessage() }
+                system(fixSystemMessage)
                 message(message)
             }
 
@@ -82,12 +80,14 @@ public class ToolCallFixLLMAsAJudge(
 
     private suspend fun AIAgentLLMWriteSession.isToolCallIntended(message: Message.Response) =
         message is Message.Tool.Call ||
-            withTemporaryContext {
-                prompt = prompt("check-tool-call-intended") {
-                    system { intentSystemMessage() }
-                    user(message.content)
-                }
-
+            with(
+                copy(
+                    prompt = prompt("check-tool-call-intended") {
+                        system(intentSystemMessage)
+                        user(message.content)
+                    }
+                )
+            ) {
                 val response = requestLLMWithoutTools()
 
                 response is Message.Tool.Call || response.content.contains("INTENDED_TOOL_CALL", ignoreCase = true)

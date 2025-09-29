@@ -44,7 +44,6 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 @ExtendWith(OllamaTestFixtureExtension::class)
-@OptIn(ResponseProcessorApi::class)
 @ExtendWith(RetryExtension::class)
 class OllamaAgentIntegrationTest {
     companion object {

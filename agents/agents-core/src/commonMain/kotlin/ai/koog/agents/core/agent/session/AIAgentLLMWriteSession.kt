@@ -403,7 +403,7 @@ public class AIAgentLLMWriteSession internal constructor(
      * @param responseProcessor The processor to apply to the LLM response.
      * @return A [Message.Response] object containing the response from the LLM.
      */
-    public suspend fun requestLLM(responseProcessor: ResponseProcessor): Message.Response {
+    public suspend fun requestLLM(responseProcessor: ResponseProcessor = ResponseProcessor.None): Message.Response {
         return responseProcessor.process(this, super.requestLLM()).also { response ->
             updatePrompt { message(response) }
         }
@@ -427,7 +427,7 @@ public class AIAgentLLMWriteSession internal constructor(
      * @param responseProcessor The processor to apply to the LLM response.
      * @return A list of `Message.Response` containing the results from the LLM.
      */
-    public suspend fun requestLLMMultiple(responseProcessor: ResponseProcessor): List<Message.Response> {
+    public suspend fun requestLLMMultiple(responseProcessor: ResponseProcessor = ResponseProcessor.None): List<Message.Response> {
         return responseProcessor.process(this, super.requestLLMMultiple()).also { responses ->
             updatePrompt {
                 responses.forEach { message(it) }
@@ -510,5 +510,26 @@ public class AIAgentLLMWriteSession internal constructor(
             this.prompt = prompt
         }
         return executor.executeStreaming(prompt, model, tools)
+    }
+
+    /**
+     * Creates a copy of the current AIAgentLLMWriteSession
+     */
+    public fun copy(
+        prompt: Prompt? = null,
+        tools: List<ToolDescriptor>? = null,
+        model: LLModel? = null
+    ): AIAgentLLMWriteSession {
+        validateSession()
+        return AIAgentLLMWriteSession(
+            environment,
+            executor,
+            tools ?: this.tools,
+            toolRegistry,
+            prompt ?: this.prompt,
+            model ?: this.model,
+            config,
+            clock
+        )
     }
 }

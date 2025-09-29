@@ -1,7 +1,6 @@
 package ai.koog.agents.core.processor
 
 import ai.koog.agents.core.agent.session.AIAgentLLMWriteSession
-import ai.koog.agents.core.dsl.extension.withTemporaryContext
 import ai.koog.prompt.message.Message
 import io.github.oshai.kotlinlogging.KLogger
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -27,7 +26,7 @@ public abstract class ResponseProcessor {
     }
 
     internal suspend fun process(session: AIAgentLLMWriteSession, messages: List<Message.Response>): List<Message.Response> {
-        return session.withTemporaryContext { updateMessages(session, messages) }
+        return with(session.copy()) { updateMessages(session, messages) }
     }
 
     internal suspend fun process(session: AIAgentLLMWriteSession, message: Message.Response): Message.Response =

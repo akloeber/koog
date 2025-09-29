@@ -3,21 +3,75 @@ package ai.koog.agents.core.processor
 import ai.koog.agents.core.agent.session.AIAgentLLMWriteSession
 import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.ResponseMetaInfo
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonNames
+import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.buildJsonObject
 
+/**
+ * A data class representing a tool call message
+ */
 @Serializable
-private data class ToolCallMessage(
-    @JsonNames("id", "tool_call_id")
+public data class ToolCall(
     val id: String? = null,
-    @JsonNames("name", "tool", "tool_name")
     val tool: String,
-    @JsonNames("arguments", "args", "parameters", "params")
     val args: JsonObject
 )
+
+/**
+ * A custom serializer for [ToolCall] that handles custom JSON property names.
+ */
+public class ToolCallSerializer(
+    private val idNames: List<String> = listOf("id", "tool_call_id"),
+    private val toolNames: List<String> = listOf("name", "tool", "tool_name"),
+    private val argsNames: List<String> = listOf("arguments", "args", "parameters", "params"),
+    private val allowNestedObject: Boolean = true,
+) : KSerializer<ToolCall> by delegate {
+    override fun deserialize(decoder: Decoder): ToolCall {
+        require(decoder is JsonDecoder) { "This serializer can only be used with JSON" }
+
+        val jsonElement = decoder.decodeJsonElement()
+        require(jsonElement is JsonObject) { "Expected a JSON object" }
+
+        return deserializeFromJsonObject(jsonElement, decoder.json)
+    }
+
+    private fun deserializeFromJsonObject(jsonObject: JsonObject, json: Json): ToolCall {
+        // Check if this is a nested structure (e.g., {"function_call": {...}})
+        val nestedObject = if (allowNestedObject) findNestedObject(jsonObject) else null
+        var objectToDeserialize = nestedObject ?: jsonObject
+
+        objectToDeserialize = updateKey(objectToDeserialize, idNames, "id")
+        objectToDeserialize = updateKey(objectToDeserialize, toolNames, "tool")
+        objectToDeserialize = updateKey(objectToDeserialize, argsNames, "args")
+
+        return json.decodeFromJsonElement(delegate, objectToDeserialize)
+    }
+
+    private companion object {
+        private val delegate = kotlinx.serialization.serializer<ToolCall>()
+
+        private fun findNestedObject(jsonObject: JsonObject): JsonObject? =
+            if (jsonObject.size == 1) {
+                jsonObject.entries.first().value as? JsonObject
+            } else {
+                null
+            }
+
+        private fun updateKey(
+            jsonObject: JsonObject,
+            expectedKeys: List<String>,
+            updatedKey: String
+        ) = buildJsonObject {
+            for ((key, value) in jsonObject) {
+                put(if (key in expectedKeys) updatedKey else key, value)
+            }
+        }
+    }
+}
 
 private val IncorrectEscapesMap: Map<String, String> = mapOf(
     "\\'" to "'"
@@ -33,33 +87,17 @@ private fun fixIncorrectEscapes(
     return result
 }
 
-private fun deserializeToolCallMessage(
-    toolCall: String,
-    json: Json,
-): ToolCallMessage {
-    val fixedToolCall = fixIncorrectEscapes(toolCall)
-
-    return try {
-        json.decodeFromString<ToolCallMessage>(fixedToolCall)
-    } catch (e: Exception) {
-        val jsonObject = json.parseToJsonElement(fixedToolCall).jsonObject
-        require(jsonObject.size == 1) { "Failed to deserialize from standard structure" }
-
-        val nestedObject = jsonObject.values.first()
-        json.decodeFromJsonElement(ToolCallMessage.serializer(), nestedObject)
-    }
-}
-
 private fun extractJsonToolCall(
-    toolCall: String,
+    toolCallMessage: String,
     metaInfo: ResponseMetaInfo,
     json: Json,
+    serializer: KSerializer<ToolCall> = ToolCall.serializer()
 ): Message.Tool.Call? = runCatching {
-    val toolCallMessage = deserializeToolCallMessage(toolCall, json)
+    val toolCall = json.decodeFromString(serializer, fixIncorrectEscapes(toolCallMessage))
     Message.Tool.Call(
-        toolCallMessage.id,
-        toolCallMessage.tool,
-        toolCallMessage.args.toString(),
+        toolCall.id,
+        toolCall.tool,
+        toolCall.args.toString(),
         metaInfo
     )
 }.getOrNull()
@@ -67,19 +105,24 @@ private fun extractJsonToolCall(
 /**
  * A response processor that extracts tool calls from JSON responses.
  *
- * @param extractJsonToolCall A function that extracts a tool call from a JSON string.
  * @param json The JSON configuration to use.
+ * @param serializer The serializer to use for deserializing tool calls. If null, the default serializer is used.
  */
 @ResponseProcessorApi
 public class ExtractJsonToolCall(
-    private val extractJsonToolCall: (String, ResponseMetaInfo, Json) -> Message.Tool.Call? = ::extractJsonToolCall,
-    private val json: Json = Json {},
+    private val json: Json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+    },
+    private val serializer: KSerializer<ToolCall> = ToolCallSerializer()
 ) : ResponseProcessor() {
     override suspend fun updateMessages(
         session: AIAgentLLMWriteSession,
         messages: List<Message.Response>
     ): List<Message.Response> = messages.map { message ->
-        message as? Message.Tool.Call ?: (extractJsonToolCall(message.content, message.metaInfo, json) ?: message)
+        message as? Message.Tool.Call
+            ?: extractJsonToolCall(message.content, message.metaInfo, json, serializer)
+            ?: message
     }
 }
 
@@ -88,21 +131,24 @@ public class ExtractJsonToolCall(
  *
  * @param startTag The tag that marks the start of a tool call.
  * @param endTag The tag that marks the end of a tool call.
- * @param extractJsonToolCall A function that extracts a tool call from a JSON string.
  * @param json The JSON configuration to use.
+ * @param serializer The serializer to use for deserializing tool calls. If null, the default serializer is used.
  */
 @ResponseProcessorApi
 public class ExtractTaggedJsonToolCall(
     private val startTag: String = "<tool_call>",
     private val endTag: String = "</tool_call>",
-    private val extractJsonToolCall: (String, ResponseMetaInfo, Json) -> Message.Tool.Call? = ::extractJsonToolCall,
-    private val json: Json = Json {},
+    private val json: Json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+    },
+    private val serializer: KSerializer<ToolCall> = ToolCallSerializer()
 ) : ResponseProcessor() {
     override suspend fun updateMessages(
         session: AIAgentLLMWriteSession,
         messages: List<Message.Response>
     ): List<Message.Response> = messages.map { message ->
-        message as? Message.Tool.Call ?: (searchToolCall(message) ?: message)
+        message as? Message.Tool.Call ?: searchToolCall(message) ?: message
     }
 
     private fun searchToolCall(message: Message.Response): Message.Tool.Call? {
@@ -117,7 +163,8 @@ public class ExtractTaggedJsonToolCall(
             if (endIndex == -1) break
 
             val toolCall = content.substring(startIndex, endIndex)
-            extractJsonToolCall(toolCall, message.metaInfo, json)?.let { return it }
+            val result = extractJsonToolCall(toolCall, message.metaInfo, json, serializer)
+            result?.let { return it }
 
             startIndex += startTag.length
         }
